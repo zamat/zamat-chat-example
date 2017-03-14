@@ -26,6 +26,12 @@ Create database Schema, load fixtures and clear cache
    php bin/console doctrine:fixtures:load
 
    php bin/console cache:clear --env=prod
+   
+   
 ```
+### Step 4: Start websocket server
 
-
+``` bash
+   php bin/console websocket:server:start
+```
+### Step 5: Run website and have fun
