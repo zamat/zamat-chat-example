@@ -1,0 +1,257 @@
+{% extends 'base.html.twig' %}
+
+{% block javascripts %}
+
+    <script type="text/javascript">
+        
+            $("#login").submit(function(e) {
+
+                $.ajax({
+                          type: "POST",
+                          url: $("#login").attr('action'),
+                          data: $("#login").serialize(),
+                          success: function (data)
+                          {   
+                            var currentUuid = data.uuid;
+                            var currentEmail = data.email;
+                            var currentFirstname = data.firstname;
+                            var currentLastname = data.lastname;
+                            var currentUsername = currentFirstname + ' ' + currentLastname;
+                            var participantEndpoint = "/user/list";                          
+                            $.get(participantEndpoint, function(data){
+                                
+                                    $.each(data, function(key,item) {
+                                            var fullname = item.firstname + ' ' + item.lastname;
+                                            var $item = $('<li class="list-group-item" id="connection'+item.uuid+'" data-user-id="'+item.uuid+'" >' + fullname + '</li>');
+                                            $('.connections-list').append($item);                                     
+                                    });  
+                                    
+                            }).promise().done( function(){
+                                
+                                $('#login').hide();
+                                
+                                var application = socket.connect("ws://localhost:8080/chat");
+                                application.on("socket/connect", function (session) {
+                                    session.subscribe("zamat/chat/connection", function (uri, payload) {
+                                        if(payload.action === 'list') {
+                                           $.each(payload.users, function( key, value ) {
+                                              var $node = $('#connection'+value.uuid);
+                                              $node.data('session-id',key);
+                                           }); 
+                                        } 
+                                        if(payload.action === 'disconnect') {
+                                           var $node = $('#connection'+payload.uuid);                             
+                                              $node.removeData('session-id');
+                                        }    
+                                        if(payload.action === 'connect') {
+                                              var $node = $('#connection'+payload.participant.uuid);                             
+                                              $node.data('session-id',payload.participant.sessionid);
+                                        }                                     
+                                    }); 
+                                    session.subscribe("zamat/chat/thread", function (uri, payload) {
+                                        if(payload.action === 'create') {
+                                             if(currentUuid === payload.participant.uuid) {
+                                                var participant = payload.author; 
+                                             } else {
+                                                var participant = payload.participant;  
+                                             }    
+                                              var participantfullname = participant.firstname+' '+ participant.lastname ;
+                                              var $nodeContainer = $('.thread-container');
+                                              var $node = $('<a href="#" class="btn btn-primary">'+participantfullname+ '</a>');
+                                              $nodeContainer.append($node); 
+                                              
+                                               session.subscribe("zamat/chat/thread/"+payload.uuid, function (uri, payload) {
+                                                if(payload.action === 'message') {
+                                                        var authorname = payload.author.firstname + ' ' +  payload.author.lastname;
+                                                        var $msg = $('<p>' + payload.createdAt +' <b>' + authorname + '</b> : '  +payload.message + '</p>');
+                                                        var $threadContainer = $('#thread-container-'+payload.threadId);
+                                                        $('.panel-body',$threadContainer).append($msg);                             
+                                                }                                                                               
+                                               });
+                                               var messageEndpoint = '/messages?threadId='+payload.uuid+'';
+                                               $.get(messageEndpoint, function(data){
+                                                   
+                                                    
+                                                    var $item = $('<div id="thread-container-'+payload.uuid+'" class="panel panel-default"><div class="panel-heading">'+participantfullname+'</div><div class="panel-body"></div></div>');                                                     
+                                                    var $footer = $('<div class="panel-footer"><div class="form"><form action="/messages" method="post" class="message-form" ><input type="hidden" name="threadId" value="'+payload.uuid+'" /><input type="hidden" name="authorId" value="'+currentUuid+'" /><textarea name="message" class="form-control msg"></textarea><br /><button class="send-message btn btn-primary">Send</button></form></div></div>');               
+                                                    $item.append($footer);
+                                                    
+                                                    $.each(data, function(key,item) {
+                                                        var authorname = item.author.firstname + ' ' +  item.author.lastname;
+                                                        var $msg = $('<p>' + item.created_at +' <b>' + authorname + '</b> : '  +item.message + '</p>');
+                                                        $('.panel-body',$item).append($msg);
+                                                    });                              
+                                                     
+                                                    var $container = $('.message-container');                                                  
+                                                    $container.append($item);
+
+                                                });                                       
+                                              
+                                        }                           
+                                    });   
+                                                         
+                                    session.publish("zamat/chat/connection",{
+                                        uuid : currentUuid, 
+                                        username : currentUsername, 
+                                        email : currentEmail, 
+                                        firstname : currentFirstname, 
+                                        lastname : currentLastname, 
+                                        sessionid : session.sessionid()
+                                    });
+                                    
+                                    var threadEndpoint = "/thread/list?uuid="+currentUuid; 
+                                    $.get(threadEndpoint, function(data){
+                                           $.each(data, function( key, value ) {
+                                               
+                                             if(currentUuid === value.participant.uuid) {
+                                                var participant = value.author; 
+                                             } else {
+                                                var participant = value.participant;  
+                                             } 
+                                             
+                                              var participantfullname = participant.firstname+' '+ participant.lastname ;
+                                              var $nodeContainer = $('.thread-container');                                           
+                                              var $node = $('<a href="#" class="btn btn-primary">'+participantfullname+ '</a>');
+                                              $nodeContainer.append($node);
+                                              session.subscribe("zamat/chat/thread/"+value.uuid, function (uri, payload) {
+                                                if(payload.action === 'message') {
+                                                        var authorname = payload.author.firstname + ' ' +  payload.author.lastname;
+                                                        var $msg = $('<p>' + payload.createdAt +' <b>' + authorname + '</b> : '  +payload.message + '</p>');
+                                                        var $threadContainer = $('#thread-container-'+payload.threadId); 
+                                                                                                                
+                                                        $('.panel-body',$threadContainer).append($msg);
+                                                }                                                                
+                                              }); 
+                                              
+                                               var messageEndpoint = '/messages?threadId='+value.uuid+'';
+                                               $.get(messageEndpoint, function(data){
+                                                   
+                                                    
+                                                    var $item = $('<div id="thread-container-'+value.uuid+'" class="panel panel-default"><div class="panel-heading">'+participantfullname+'</div><div class="panel-body"></div></div>');                                                     
+                                                    var $footer = $('<div class="panel-footer"><div class="form"><form action="/messages" method="post" class="message-form" ><input type="hidden" name="threadId" value="'+value.uuid+'" /><input type="hidden" name="authorId" value="'+currentUuid+'" /><textarea name="message" class="form-control msg"></textarea><br /><button class="send-message btn btn-primary">Send</button></form></div></div>');               
+                                                    $item.append($footer);
+                                                    
+                                                    $.each(data, function(key,item) {
+                                                        var authorname = item.author.firstname + ' ' +  item.author.lastname;
+                                                        var $msg = $('<p>' + item.created_at +' <b>' + authorname + '</b> : '  +item.message + '</p>');
+                                                        $('.panel-body',$item).append($msg);
+                                                    });                              
+                                                     
+                                                    var $container = $('.message-container');                                                  
+                                                    $container.append($item);
+
+                                                });                                           
+  
+                                           });        
+                                    });
+                                    
+                                    $(document).on("submit",".message-form",function(e) { 
+
+                                                      var messageEndpoint = $(this).attr('action');
+                                                      e.preventDefault();
+                                                      $.ajax({
+                                                           type: "POST",
+                                                           url: messageEndpoint,
+                                                           data: $(this).serialize(), 
+                                                           success: function(data)
+                                                           {
+                                                            if(data) {
+                                                                session.publish("zamat/chat/thread/"+ data.thread.uuid ,{
+                                                                    uuid : data.uuid,                                                
+                                                                    threadId : data.thread.uuid,                                                
+                                                                    message : data.message, 
+                                                                    author : data.author, 
+                                                                    sessionid : session.sessionid(),
+                                                                    createdAt : data.created_at
+                                                                });                                                               
+                                                            }              
+                                                           }
+                                                      });
+                                                                                    
+                                    });    
+                                    
+                                    $(document).on("dblclick",".connections-list li",function() {  
+
+                                        var threadEndpoint = '/thread';
+                                        var userId = $(this).data('user-id');
+                                        if(userId !== currentUuid) {
+                                         
+                                            $.post(threadEndpoint,{ user : userId , author: currentUuid}, function(data) {
+                                                                                                
+                                                if(data) {
+                                                    session.publish("zamat/chat/thread",{
+                                                        author : data.author, 
+                                                        participant : data.participant, 
+                                                        sessionid : session.sessionid(),
+                                                        uuid : data.uuid,
+                                                        createdAt : data.created_at
+                                                    });                                                               
+                                                }
+       
+                                            }).promise().done(function () {
+                                                
+                                            });                                 
+                                         
+                                        }
+                                    });  
+     
+                                });
+
+                            } );   
+                          }
+                });
+
+                e.preventDefault(); 
+            });     
+
+    </script>
+
+{% endblock %}
+
+{% block body %}
+    <div class="row">
+        <div class="col-md-8">
+            <div class="panel panel-default">
+                <div class="panel-heading">Conversations</div>
+                <div class="panel-body thread-container"></div>
+            </div>    
+            <div class="panel panel-default">
+                <div class="panel-heading">Message</div>
+                <div class="panel-body message-container"></div>               
+            </div>         
+        </div>
+        <div class="col-md-4">
+            <div class="panel panel-default">
+                <div class="panel-heading">Connections</div>
+                <div class="panel-body">
+                    <div class="connections">
+                        <ul class="list-group connections-list"></ul>
+                    </div>                   
+                </div>
+            </div> 
+            <div class="panel panel-default">
+                <div class="panel-heading">Login Form</div>
+                <div class="panel-body">
+                    <form action="/connect" id="login" >
+                        <div class="row">
+                            <div class="col-md-12">
+                                <input type="text" name="username" class="form-control" placeholder="username ..." />                               
+                            </div>                          
+                        </div>
+                        <div class="row">
+                            <div class="col-md-12">
+                                <input type="text" name="password" class="form-control" placeholder="password ..." />                               
+                            </div>                          
+                        </div>                     
+                        <div class="row">
+                            <div class="col-md-12">
+                                <button type="submit" class="btn btn-primary" >Login</button>
+                            </div>
+                        </div>            
+                        
+                    </form>                 
+                </div>
+            </div>          
+        </div>
+    </div>
+{% endblock %}

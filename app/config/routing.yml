@@ -1,0 +1,20 @@
+app:
+    resource: "@AppBundle/Controller/"
+    type:     annotation
+
+NelmioApiDocBundle:
+  resource: "@NelmioApiDocBundle/Resources/config/routing.yml"
+  prefix: /api/doc
+  
+_chat_connection:
+    resource: "@ZamatChatBundle/Controller/ConnectionController.php"
+    type:     rest
+_chat_thread:
+    resource: "@ZamatChatBundle/Controller/ThreadController.php"
+    type:     rest
+_chat_message:
+    resource: "@ZamatChatBundle/Controller/MessageController.php"
+    type:     rest
+_chat_user:
+    resource: "@ZamatChatBundle/Controller/ParticipantController.php"
+    type:     rest 
